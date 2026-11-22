@@ -16,7 +16,11 @@ import struct
 import wave
 import zlib
 
-from PIL import Image, ImageDraw
+try:
+    from PIL import Image, ImageDraw
+except ModuleNotFoundError:  # Sound, map and raw-file packs do not need images.
+    Image = None
+    ImageDraw = None
 
 
 ATLAS_HEADER = struct.Struct("<4sHHHHII")
@@ -599,12 +603,20 @@ def _output_file(root: Path, value: str, suffix: str) -> Path:
     return root / value
 
 
+def _require_pillow(manifest: dict) -> None:
+    """Image atlases need Pillow; audio-only manifests must pack without it."""
+    if Image is None and (manifest.get("atlases") or manifest.get("wall_atlases")):
+        raise SystemExit(
+            "Pillow is required to pack image assets: python3 -m pip install Pillow")
+
+
 def compile_assets(source: Path, output: Path, manifest_file: Path,
                    limit: int | None = None) -> dict:
     """Compile one versioned project manifest into runtime assets."""
     manifest = json.loads(manifest_file.read_text(encoding="utf-8"))
     if manifest.get("schema") != "mosaico-game-assets/v1":
         raise ValueError("unsupported game asset manifest schema")
+    _require_pillow(manifest)
     if limit is None:
         limit = int(manifest.get("limit_bytes", 1024 * 1024))
     if limit <= 0:

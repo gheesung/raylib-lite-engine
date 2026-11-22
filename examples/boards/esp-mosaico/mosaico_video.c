@@ -51,6 +51,7 @@ struct mosaico_video {
     TaskHandle_t worker;
     esp_err_t worker_error;
     bool closing;
+    bool paused;
 };
 
 static uint32_t in_flight_locked(const mosaico_video_t *video)
@@ -275,6 +276,11 @@ static raylib_lite_result_t video_present(void *ctx, raylib_lite_frame_t *frame)
     int index = video->drawing;
     video->drawing = -1;
     memset(frame, 0, sizeof(*frame));
+    if (video->paused) {
+        video->states[index] = FRAME_FREE;
+        xSemaphoreGive(video->mutex);
+        return RAYLIB_LITE_OK;
+    }
     if (video->worker_error != ESP_OK || video->closing) {
         esp_err_t err = video->worker_error;
         video->worker_error = ESP_OK;
@@ -453,6 +459,30 @@ static uint32_t video_in_flight(void *ctx)
     uint32_t count = in_flight_locked(video);
     xSemaphoreGive(video->mutex);
     return count;
+}
+
+raylib_lite_result_t mosaico_video_pause(mosaico_video_t *video,
+                                         uint32_t timeout_ms)
+{
+    if (!video) return RAYLIB_LITE_INVALID_ARGUMENT;
+    xSemaphoreTake(video->mutex, portMAX_DELAY);
+    video->paused = true;
+    xSemaphoreGive(video->mutex);
+    raylib_lite_result_t result = video_flush(video, timeout_ms);
+    if (result != RAYLIB_LITE_OK) {
+        xSemaphoreTake(video->mutex, portMAX_DELAY);
+        video->paused = false;
+        xSemaphoreGive(video->mutex);
+    }
+    return result;
+}
+
+void mosaico_video_resume(mosaico_video_t *video)
+{
+    if (!video) return;
+    xSemaphoreTake(video->mutex, portMAX_DELAY);
+    video->paused = false;
+    xSemaphoreGive(video->mutex);
 }
 
 raylib_lite_video_backend_t mosaico_video_backend(mosaico_video_t *video)

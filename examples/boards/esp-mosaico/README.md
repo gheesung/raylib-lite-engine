@@ -47,6 +47,18 @@ renderer or compatibility splash component is linked into the application.
 
 Audio starts lazily on `InitAudioDevice()`; IMU starts only when requested by
 the Game. Touch release events are retried when the input queue is full.
+
+Set `enable_auto_rotate` in the Game Board configuration to follow the physical
+grip the way Vibe Mode does: a dominant accelerometer axis selects 0/90/180/270
+degrees, the device keeps its orientation while lying flat, and a change is
+applied only after it stays stable for 300 ms. The panel's MADCTL swap/mirror
+matrix is applied to both the display and the touch controller, while the
+presenter stays at rotation 0, so the logical surface and touch coordinates stay
+aligned without an extra full-frame buffer.
+A Game may also define `raylib_lite_example_board_extra_input_start/stop` to
+translate product input hardware, such as an expansion-slot controller, into
+`raylib_lite_example_board_push_action()` events.
+
 Cleanup joins audio and input workers, closes the strip backend, deletes the
 presenter, then deinitializes Board Manager. Failed cleanup retains the Board
 handle for retry. A successful destroy permits creating a new Board.

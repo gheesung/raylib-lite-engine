@@ -19,6 +19,8 @@ typedef struct {
     uint16_t imu_sample_ms;
     uint16_t drawbuf_lines;
     uint8_t drawbuf_count;
+    /* Follow the physical grip when the Board has an accelerometer. */
+    bool enable_auto_rotate;
     /* Game-owned logical surface; Boards may scale it to the physical LCD. */
     uint16_t logical_width;
     uint16_t logical_height;
@@ -39,6 +41,12 @@ esp_err_t raylib_lite_example_board_destroy(
     raylib_lite_example_board_t *board, uint32_t timeout_ms);
 esp_err_t raylib_lite_example_board_retry_cleanup(
     raylib_lite_example_board_t *board, uint32_t timeout_ms);
+
+/* Push one action edge from product-owned input hardware, such as an expansion
+ * slot controller, into the same queue as on-Board input. Boards that support
+ * product input start it after input startup and stop it before teardown. */
+esp_err_t raylib_lite_example_board_push_action(
+    raylib_lite_example_board_t *board, int32_t action, bool pressed);
 
 /* Optional singleton haptic capability for native example glue. Strength is 0..100; zero stops the motor. */
 esp_err_t raylib_lite_example_board_haptic_init(void);

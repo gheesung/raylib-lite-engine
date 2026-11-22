@@ -22,15 +22,30 @@ typedef uint32_t TickType_t;
 typedef void *TaskHandle_t;
 typedef void *SemaphoreHandle_t;
 typedef void *esp_lcd_touch_handle_t;
+typedef void *esp_lcd_panel_handle_t;
 typedef struct { uint16_t x, y; uint8_t track_id; } esp_lcd_touch_point_data_t;
 typedef struct { void *panel_handle, *io_handle; } dev_display_lcd_handles_t;
 typedef struct { void *touch_handle; } dev_lcd_touch_handles_t;
 typedef struct esp_display_presenter { int dummy; } esp_display_presenter_t;
+typedef int esp_display_present_rotation_t;
 #define ESP_DISPLAY_PRESENT_PIXEL_FORMAT_RGB565 1
 #define ESP_DISPLAY_PRESENT_PANEL_IO 1
 #define ESP_DISPLAY_PRESENT_ROTATE_0 0
+#define ESP_DISPLAY_PRESENT_ROTATE_90 90
+#define ESP_DISPLAY_PRESENT_ROTATE_180 180
+#define ESP_DISPLAY_PRESENT_ROTATE_270 270
 #define ESP_DISPLAY_PRESENT_TE_SYNC_DISABLED() 0
 #define ESP_DISPLAY_PRESENT_MODE_NONE 0
+/* Log arguments are forwarded to a no-op function so values referenced only by
+ * a diagnostic stay "used" under -Werror=unchecked-variable. */
+void mosaico_test_log(const char *tag, const char *fmt, ...);
+#define ESP_LOGI(tag, fmt, ...) mosaico_test_log(tag, fmt, ##__VA_ARGS__)
+#define ESP_LOGW(tag, fmt, ...) mosaico_test_log(tag, fmt, ##__VA_ARGS__)
+#define ESP_LOGE(tag, fmt, ...) mosaico_test_log(tag, fmt, ##__VA_ARGS__)
+#define ESP_RETURN_ON_ERROR(expr, tag, fmt, ...) do { \
+    const esp_err_t err__ = (expr); \
+    if (err__ != ESP_OK) return err__; \
+} while (0)
 typedef struct {
     unsigned width, height, pixel_format, max_damage_areas;
     struct {
@@ -62,10 +77,20 @@ esp_err_t mosaico_hardware_haptic_set(uint8_t);
 esp_err_t mosaico_hardware_imu_read(void *, float *, float *, float *);
 esp_err_t esp_lcd_touch_read_data(void *);
 esp_err_t esp_lcd_touch_get_data(void *, esp_lcd_touch_point_data_t *, uint8_t *, uint8_t);
+esp_err_t esp_lcd_touch_set_swap_xy(esp_lcd_touch_handle_t, bool);
+esp_err_t esp_lcd_touch_set_mirror_x(esp_lcd_touch_handle_t, bool);
+esp_err_t esp_lcd_touch_set_mirror_y(esp_lcd_touch_handle_t, bool);
+esp_err_t esp_lcd_panel_swap_xy(esp_lcd_panel_handle_t, bool);
+esp_err_t esp_lcd_panel_mirror(esp_lcd_panel_handle_t, bool, bool);
 esp_err_t esp_display_presenter_create(const esp_display_presenter_config_t *, esp_display_presenter_t **);
 esp_err_t esp_display_presenter_delete(esp_display_presenter_t *);
+esp_err_t esp_display_presenter_set_rotation(esp_display_presenter_t *, esp_display_present_rotation_t);
+esp_err_t esp_display_presenter_map_point(const esp_display_presenter_t *, int32_t *, int32_t *);
+const char *esp_err_to_name(esp_err_t);
 typedef struct mosaico_video mosaico_video_t;
 raylib_lite_result_t mosaico_video_open(esp_display_presenter_t *, uint16_t, uint16_t, mosaico_video_t **);
 raylib_lite_result_t mosaico_video_close(mosaico_video_t *, uint32_t);
+raylib_lite_result_t mosaico_video_pause(mosaico_video_t *, uint32_t);
+void mosaico_video_resume(mosaico_video_t *);
 raylib_lite_video_backend_t mosaico_video_backend(mosaico_video_t *);
 raylib_lite_result_t raylib_lite_game_audio_shutdown(uint32_t);

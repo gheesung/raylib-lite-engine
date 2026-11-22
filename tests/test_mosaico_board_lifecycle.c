@@ -53,6 +53,20 @@ esp_err_t esp_board_manager_init_device_by_name(const char *n) { (void)n; return
 esp_err_t esp_lcd_touch_read_data(void *t) { assert(t); return ESP_OK; }
 esp_err_t esp_lcd_touch_get_data(void *t, esp_lcd_touch_point_data_t *points, uint8_t *count, uint8_t max)
 { assert(t && max); *count = poll == 0 ? 1 : 0; points[0] = (esp_lcd_touch_point_data_t){12, 34, 7}; return ESP_OK; }
+void mosaico_test_log(const char *tag, const char *fmt, ...) { (void)tag; (void)fmt; }
+const char *esp_err_to_name(esp_err_t err) { (void)err; return "fake"; }
+static bool panel_swap, panel_mirror_x, panel_mirror_y;
+static bool touch_swap, touch_mirror_x, touch_mirror_y;
+esp_err_t esp_lcd_panel_swap_xy(esp_lcd_panel_handle_t p, bool swap)
+{ assert(p == lcd.panel_handle); panel_swap = swap; return ESP_OK; }
+esp_err_t esp_lcd_panel_mirror(esp_lcd_panel_handle_t p, bool mx, bool my)
+{ assert(p == lcd.panel_handle); panel_mirror_x = mx; panel_mirror_y = my; return ESP_OK; }
+esp_err_t esp_lcd_touch_set_swap_xy(esp_lcd_touch_handle_t t, bool swap)
+{ assert(t == touch.touch_handle); touch_swap = swap; return ESP_OK; }
+esp_err_t esp_lcd_touch_set_mirror_x(esp_lcd_touch_handle_t t, bool mx)
+{ assert(t == touch.touch_handle); touch_mirror_x = mx; return ESP_OK; }
+esp_err_t esp_lcd_touch_set_mirror_y(esp_lcd_touch_handle_t t, bool my)
+{ assert(t == touch.touch_handle); touch_mirror_y = my; return ESP_OK; }
 esp_err_t esp_display_presenter_create(const esp_display_presenter_config_t *cfg, esp_display_presenter_t **out)
 {
     assert(manager_live && cfg->target.hw.panel == lcd.panel_handle);
@@ -67,8 +81,15 @@ esp_err_t esp_display_presenter_delete(esp_display_presenter_t *p)
     if (fail_presenter_delete) { --fail_presenter_delete; return ESP_FAIL; }
     return ESP_OK;
 }
+esp_err_t esp_display_presenter_set_rotation(esp_display_presenter_t *p, esp_display_present_rotation_t r)
+{ assert(p == &presenter); (void)r; return ESP_OK; }
+esp_err_t esp_display_presenter_map_point(const esp_display_presenter_t *p, int32_t *x, int32_t *y)
+{ assert(p == &presenter && x && y); return ESP_OK; }
 raylib_lite_result_t mosaico_video_open(esp_display_presenter_t *p, uint16_t w, uint16_t h, mosaico_video_t **out)
 { assert(p && w == 480 && h == 480); *out = (mosaico_video_t *)&mock_handle; return RAYLIB_LITE_OK; }
+raylib_lite_result_t mosaico_video_pause(mosaico_video_t *v, uint32_t t)
+{ (void)t; assert(v); return RAYLIB_LITE_OK; }
+void mosaico_video_resume(mosaico_video_t *v) { assert(v); }
 raylib_lite_result_t mosaico_video_close(mosaico_video_t *v, uint32_t t)
 { (void)t; assert(v && manager_live); close_seq = ++clock_seq; return RAYLIB_LITE_OK; }
 raylib_lite_video_backend_t mosaico_video_backend(mosaico_video_t *v)
@@ -90,12 +111,28 @@ raylib_lite_result_t raylib_lite_input_push(raylib_lite_input_queue_t *q, const 
 
 int main(void)
 {
+    /* Grip classification matches Vibe Mode: dominant axis, flat keeps state. */
+    assert(orientation_from_accel(0.0f, 9.8f, 0.0f) == 0);
+    assert(orientation_from_accel(0.0f, -9.8f, 0.0f) == 180);
+    assert(orientation_from_accel(9.8f, 0.0f, 0.0f) == 90);
+    assert(orientation_from_accel(-9.8f, 0.0f, 0.0f) == 270);
+    assert(orientation_from_accel(0.0f, 0.0f, 9.8f) == -1);
+    assert(orientation_from_accel(6.0f, 6.0f, 0.0f) == -1);
     raylib_lite_example_board_config_t cfg = {.logical_width = 480, .logical_height = 480};
     raylib_lite_example_board_t *board = NULL;
     for (unsigned max = 1; max <= 2; ++max) {
         cfg.touch_points = max;
         assert(raylib_lite_example_board_create(&cfg, &board) == ESP_OK && board);
         assert(raylib_lite_example_board_start_input(board) == ESP_OK);
+        /* The panel and touch controller get the same matrix per angle. */
+        assert(apply_panel_orientation(board, 90) == ESP_OK);
+        assert(panel_swap && panel_mirror_x && !panel_mirror_y);
+        assert(touch_swap && touch_mirror_x && !touch_mirror_y);
+        assert(apply_panel_orientation(board, 180) == ESP_OK);
+        assert(!panel_swap && panel_mirror_x && panel_mirror_y);
+        assert(!touch_swap && touch_mirror_x && touch_mirror_y);
+        assert(apply_panel_orientation(board, 0) == ESP_OK);
+        assert(!panel_swap && !panel_mirror_x && !panel_mirror_y);
         worker_board = board;
         poll = release_attempts = accepted_releases = accepted_presses = 0;
         touch_worker(board);
